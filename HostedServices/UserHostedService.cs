@@ -5,10 +5,11 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using UsersMS.Models;
 using UsersMS.Options;
+using MongoDB.Driver;
 
 namespace UsersMS.HostedServices;
 
-public class PullNewUsersRabbitMqService : IHostedService
+public class UserHostedService : IHostedService
 {
     public static List<User> Users { get; set; }
 
@@ -16,12 +17,9 @@ public class PullNewUsersRabbitMqService : IHostedService
     private readonly IConnection connection;
     private readonly IModel model;
     private const string QUEUE_NAME = "new_user";
+    private readonly string connectionString;
 
-    static PullNewUsersRabbitMqService() {
-        Users = new List<User>();
-    }
-
-    public PullNewUsersRabbitMqService(IOptions<RabbitMqOptions> optionsSnapshot)
+    public UserHostedService(IOptions<RabbitMqOptions> optionsSnapshot, IConfiguration configuration)
     {
         this.rabbitMqConnectionFactory = new ConnectionFactory()
         {
@@ -32,6 +30,18 @@ public class PullNewUsersRabbitMqService : IHostedService
 
         this.connection = this.rabbitMqConnectionFactory.CreateConnection();
         this.model = connection.CreateModel();
+        this.connectionString = configuration.GetConnectionString("MongoDbUsers");
+    }
+    static UserHostedService() {
+        var client = new MongoClient("mongodb://localhost:27017");
+
+        var database = client.GetDatabase("UsersDb");
+
+        var collection = database.GetCollection<User>("Users");
+
+        var findAllQuery = collection.Find(user => true);
+
+        Users = findAllQuery.ToList();
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -54,7 +64,17 @@ public class PullNewUsersRabbitMqService : IHostedService
 
                 var newUser = JsonSerializer.Deserialize<User>(newUserJson)!;
 
-                Users.Add(newUser);
+                var client = new MongoClient(connectionString);
+
+                var database = client.GetDatabase("UsersDb");
+
+                var collection = database.GetCollection<User>("Users");
+
+                var findAllQuery = collection.Find(user => true);
+
+                Users = findAllQuery.ToList();
+
+                collection.InsertOneAsync(newUser).Wait();
             }
             catch(Exception ex) {
                 System.Console.WriteLine($"Couldn't pull new user: '{ex}' | Body: {newUserJson}");

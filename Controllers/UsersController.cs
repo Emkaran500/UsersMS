@@ -9,10 +9,10 @@ namespace UsersMS.Controllers
     [ApiController]
     public class UsersController : ControllerBase
     {
-        [HttpGet("api/[controller]/all")]
-        public async Task<IActionResult> GetAll()
+        [HttpGet("api/[controller]/[action]")]
+        public async Task<IActionResult> All()
         {
-            return Ok(UsersMS.HostedServices.PullNewUsersRabbitMqService.Users);
+            return Ok(UsersMS.HostedServices.UserHostedService.Users);
         }
     }
 }
